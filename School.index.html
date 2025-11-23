@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг нарушений в школе</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Скрываем предупреждение Tailwind CDN
+        tailwind.config = { theme: { extend: {} } }
+    </script>
+    <style>
+        .chart-bar {
+            transition: all 0.5s ease;
+        }
+        .chart-bar:hover {
+            opacity: 0.8;
+            transform: scale(1.05);
+        }
+        .lang-btn {
+            transition: all 0.3s ease;
+        }
+        .lang-btn.active {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .trend-line {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: drawLine 2s ease forwards;
+        }
+        @keyframes drawLine {
+            to { stroke-dashoffset: 0; }
+        }
+        /* Скрыть предупреждение Tailwind */
+        #tailwind-cdn-warning {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Заголовок -->
+        <div class="bg-white rounded-2xl shadow-xl p-4 md:p-8 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-4xl font-bold text-gray-800 mb-2" data-lang="title">📚 Мониторинг нарушений в школе</h1>
+                    <p class="text-sm md:text-base text-gray-600" data-lang="subtitle">Система учета дисциплинарных нарушений с историей</p>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <div class="flex gap-1 bg-gray-100 rounded-lg p-1">
+                        <button onclick="changeLang('ru')" id="langRu" class="lang-btn px-3 py-1 rounded font-medium text-sm">RU</button>
+                        <button onclick="changeLang('kz')" id="langKz" class="lang-btn px-3 py-1 rounded font-medium text-sm">KZ</button>
+                    </div>
+                    <select id="yearSelect" class="px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-medium text-sm">
+                    </select>
+                    <button onclick="exportToCSV()" class="flex items-center gap-2 bg-green-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors text-sm">
+                        <span data-lang="export">📥 Экспорт CSV</span>
+                    </button>
+                    <button onclick="exportToExcel()" class="flex items-center gap-2 bg-blue-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm">
+                        <span data-lang="exportExcel">📊 Экспорт Excel</span>
+                    </button>
+                    <button onclick="clearAllData()" class="flex items-center gap-2 bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors text-sm">
+                        <span data-lang="clear">🗑️ Очистить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статистические карточки -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm md:text-base text-gray-600 font-medium" data-lang="totalStudentsLabel">Всего учеников</h3>
+                    <span class="text-xl md:text-2xl">👥</span>
+                </div>
+                <p class="text-3xl md:text-4xl font-bold text-gray-800" id="totalStudents">105</p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm md:text-base text-gray-600 font-medium"><span data-lang="violationsIn">Нарушений в</span> <span id="currentYear"></span></h3>
+                    <span class="text-xl md:text-2xl">⚠️</span>
+                </div>
+                <p class="text-3xl md:text-4xl font-bold text-gray-800" id="totalViolations">0</p>
+                <p class="text-xs md:text-sm text-gray-500 mt-1"><span data-lang="allTime">Всего за все время:</span> <span id="allTimeViolations">0</span></p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm md:text-base text-gray-600 font-medium" data-lang="percentageLabel">Процент нарушителей</h3>
+                    <span class="text-xl md:text-2xl">📊</span>
+                </div>
+                <p class="text-3xl md:text-4xl font-bold" id="percentage">0%</p>
+                <p class="text-xs md:text-sm text-gray-500 mt-1" id="percentageDetails">0 <span data-lang="outOf">из</span> 105 <span data-lang="students">учеников</span></p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm md:text-base text-gray-600 font-medium" data-lang="avgPerStudent">Среднее на ученика</h3>
+                    <span class="text-xl md:text-2xl">📈</span>
+                </div>
+                <p class="text-3xl md:text-4xl font-bold text-purple-600" id="avgViolations">0</p>
+                <p class="text-xs md:text-sm text-gray-500 mt-1"><span data-lang="median">Медиана:</span> <span id="medianViolations">0</span></p>
+            </div>
+        </div>
+
+        <!-- Поиск ученика -->
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4" data-lang="searchTitle">🔍 Поиск статистики по ученику</h2>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input type="text" id="searchInput" data-lang-placeholder="searchPlaceholder" placeholder="Введите имя ученика" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <button onclick="showStudentStats()" class="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors whitespace-nowrap">
+                    <span data-lang="showStats">Показать статистику</span>
+                </button>
+            </div>
+            <div id="studentStatsContainer" class="mt-6"></div>
+        </div>
+
+        <!-- График по месяцам -->
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="monthlyChart">📅 Динамика нарушений по месяцам</span> (<span id="chartYear"></span>)</h2>
+            <div id="monthlyChart" class="flex items-end justify-between h-48 gap-1 md:gap-2"></div>
+        </div>
+
+        <!-- Тренд и прогноз -->
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="trendChart">📈 Тренд и прогноз</span> (<span class="trendYear"></span>)</h2>
+            <div id="trendChart" class="w-full overflow-x-auto" style="min-height: 250px;"></div>
+            <div id="trendStats" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- Круговая диаграмма и Топ-5 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="pieChart">🥧 Круговая диаграмма</span> (<span class="pieYear"></span>)</h2>
+                <div id="pieChart" class="flex flex-col items-center"></div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="topViolators">🏆 Топ-5 нарушителей</span> (<span class="topYear"></span>)</h2>
+                <div id="topViolators"></div>
+            </div>
+        </div>
+
+        <!-- Форма добавления и статистика -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4" data-lang="addViolation">⏰ Добавить нарушение</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2" data-lang="studentName">Имя ученика</label>
+                        <input type="text" id="studentName" data-lang-placeholder="studentNamePlaceholder" placeholder="Введите имя" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2" data-lang="violationType">Тип нарушения</label>
+                        <select id="violationType" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <option data-lang="viol1">Опоздание</option>
+                            <option data-lang="viol2">Прогул</option>
+                            <option data-lang="viol3">Нарушение дисциплины</option>
+                            <option data-lang="viol4">Невыполнение ДЗ</option>
+                            <option data-lang="viol5">Нарушение формы</option>
+                            <option data-lang="viol6">Использование телефона</option>
+                            <option data-lang="viol7">Другое</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-lang="date">Дата</label>
+                            <input type="date" id="violationDate" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2" data-lang="time">Время</label>
+                            <input type="time" id="violationTime" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                    </div>
+
+                    <button onclick="addViolation()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors">
+                        <span data-lang="addButton">Добавить нарушение</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+                <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="typeStats">📋 Статистика по типам</span> (<span class="statsYear"></span>)</h2>
+                <div id="typeStats"></div>
+            </div>
+        </div>
+
+        <!-- Корреляционная матрица -->
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="correlationMatrix">🔗 Корреляция: день недели vs тип нарушения</span> (<span class="corrYear"></span>)</h2>
+            <div id="correlationMatrix" class="overflow-x-auto"></div>
+        </div>
+
+        <!-- История нарушений -->
+        <div class="bg-white rounded-xl shadow-lg p-4 md:p-6">
+            <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-4"><span data-lang="history">📜 История нарушений</span> (<span class="historyYear"></span>)</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b-2 border-gray-200">
+                            <th class="text-left py-3 px-2 md:px-4 font-semibold text-gray-700 text-sm" data-lang="date">Дата</th>
+                            <th class="text-left py-3 px-2 md:px-4 font-semibold text-gray-700 text-sm" data-lang="time">Время</th>
+                            <th class="text-left py-3 px-2 md:px-4 font-semibold text-gray-700 text-sm" data-lang="studentName">Ученик</th>
+                            <th class="text-left py-3 px-2 md:px-4 font-semibold text-gray-700 text-sm" data-lang="violationType">Тип нарушения</th>
+                            <th class="text-right py-3 px-2 md:px-4 font-semibold text-gray-700 text-sm" data-lang="action">Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== ДАННЫЕ ==========
+        let violations = [];
+        let totalStudents = 105;
+        let selectedYear = new Date().getFullYear();
+        let currentLang = 'ru';
+
+        // ========== ПЕРЕВОДЫ ==========
+        const translations = {
+            ru: {
+                title: '📚 Мониторинг нарушений в школе',
+                subtitle: 'Система учета дисциплинарных нарушений с историей',
+                export: '📥 Экспорт CSV',
+                exportExcel: '📊 Экспорт Excel',
+                clear: '🗑️ Очистить',
+                totalStudentsLabel: 'Всего учеников',
+                violationsIn: 'Нарушений в',
+                allTime: 'Всего за все время:',
+                percentageLabel: 'Процент нарушителей',
+                avgPerStudent: 'Среднее на ученика',
+                median: 'Медиана:',
+                outOf: 'из',
+                students: 'учеников',
+                searchTitle: '🔍 Поиск статистики по ученику',
+                searchPlaceholder: 'Введите имя ученика',
+                showStats: 'Показать статистику',
+                monthlyChart: '📅 Динамика нарушений по месяцам',
+                trendChart: '📈 Тренд и прогноз',
+                pieChart: '🥧 Круговая диаграмма',
+                topViolators: '🏆 Топ-5 нарушителей',
+                addViolation: '⏰ Добавить нарушение',
+                studentName: 'Имя ученика',
+                studentNamePlaceholder: 'Введите имя',
+                violationType: 'Тип нарушения',
+                date: 'Дата',
+                time: 'Время',
+                addButton: 'Добавить нарушение',
+                typeStats: '📋 Статистика по типам',
+                correlationMatrix: '🔗 Корреляция: день недели vs тип нарушения',
+                history: '📜 История нарушений',
+                action: 'Действие',
+                delete: 'Удалить',
+                year: 'год',
+                violations: 'нарушений',
+                noData: 'Нет данных для отображения',
+                noViolations: 'Нарушений в',
+                yearEmpty: 'году пока нет',
+                historyEmpty: 'История за',
+                yearEmpty2: 'год пуста',
+                totalViolations: 'Всего нарушений',
+                firstViolation: 'Первое нарушение',
+                lastViolation: 'Последнее нарушение',
+                byYears: 'По годам:',
+                byTypes: 'По типам:',
+                last10: 'Последние 10 нарушений:',
+                notFound: 'По запросу',
+                notFound2: 'нарушений не найдено',
+                statistics: 'Статистика:',
+                viol1: 'Опоздание',
+                viol2: 'Прогул',
+                viol3: 'Нарушение дисциплины',
+                viol4: 'Невыполнение ДЗ',
+                viol5: 'Нарушение формы',
+                viol6: 'Использование телефона',
+                viol7: 'Другое',
+                confirmDelete: 'Удалить это нарушение?',
+                confirmClear: 'Вы уверены, что хотите удалить все данные?',
+                enterName: 'Введите имя ученика!',
+                trendGrowing: 'Тренд: Рост',
+                trendDecreasing: 'Тренд: Снижение',
+                trendStable: 'Тренд: Стабильный',
+                forecast: 'Прогноз на след. месяц:',
+                changeRate: 'Темп изменений:',
+                perMonth: 'в месяц',
+                monday: 'Пн',
+                tuesday: 'Вт',
+                wednesday: 'Ср',
+                thursday: 'Чт',
+                friday: 'Пт',
+                saturday: 'Сб',
+                sunday: 'Вс'
+            },
+            kz: {
+                title: '📚 Мектептегі бұзушылықтарды бақылау',
+                subtitle: 'Тарихы бар тәртіптік бұзушылықтарды есепке алу жүйесі',
+                export: '📥 Экспорт CSV',
+                exportExcel: '📊 Экспорт Excel',
+                clear: '🗑️ Тазалау',
+                totalStudentsLabel: 'Барлық оқушылар',
+                violationsIn: 'Бұзушылықтар',
+                allTime: 'Барлық уақыт бойы:',
+                percentageLabel: 'Бұзушылар пайызы',
+                avgPerStudent: 'Оқушыға орташа',
+                median: 'Медиана:',
+                outOf: 'ішінен',
+                students: 'оқушы',
+                searchTitle: '🔍 Оқушы бойынша статистиканы іздеу',
+                searchPlaceholder: 'Оқушының атын енгізіңіз',
+                showStats: 'Статистиканы көрсету',
+                monthlyChart: '📅 Айлар бойынша бұзушылықтар динамикасы',
+                trendChart: '📈 Тренд және болжам',
+                pieChart: '🥧 Дөңгелек диаграмма',
+                topViolators: '🏆 Топ-5 бұзушылар',
+                addViolation: '⏰ Бұзушылық қосу',
+                studentName: 'Оқушының аты',
+                studentNamePlaceholder: 'Атын енгізіңіз',
+                violationType: 'Бұзушылық түрі',
+                date: 'Күні',
+                time: 'Уақыты',
+                addButton: 'Бұзушылық қосу',
+                typeStats: '📋 Түрлері бойынша статистика',
+                correlationMatrix: '🔗 Корреляция: апта күні vs бұзушылық түрі',
+                history: '📜 Бұзушылықтар тарихы',
+                action: 'Әрекет',
+                delete: 'Жою',
+                year: 'жыл',
+                violations: 'бұзушылықтар',
+                noData: 'Көрсету үшін деректер жоқ',
+                noViolations: 'Бұзушылықтар',
+                yearEmpty: 'жылы әзірге жоқ',
+                historyEmpty: 'Тарих',
+                yearEmpty2: 'жыл бос',
+                totalViolations: 'Барлық бұзушылықтар',
+                firstViolation: 'Бірінші бұзушылық',
+                lastViolation: 'Соңғы бұзушылық',
+                byYears: 'Жылдар бойынша:',
+                byTypes: 'Түрлері бойынша:',
+                last10: 'Соңғы 10 бұзушылық:',
+                notFound: 'Сұрау бойынша',
+                notFound2: 'бұзушылықтар табылмады',
+                statistics: 'Статистика:',
+                viol1: 'Кешігу',
+                viol2: 'Сабақты босату',
+                viol3: 'Тәртіп бұзу',
+                viol4: 'Үй жұмысын орындамау',
+                viol5: 'Форма бұзу',
+                viol6: 'Телефон пайдалану',
+                viol7: 'Басқа',
+                confirmDelete: 'Бұл бұзушылықты жою керек пе?',
+                confirmClear: 'Барлық деректерді жойғыңыз келетініне сенімдісіз бе?',
+                enterName: 'Оқушының атын енгізіңіз!',
+                trendGrowing: 'Тренд: Өсу',
+                trendDecreasing: 'Тренд: Төмендеу',
+                trendStable: 'Тренд: Тұрақты',
+                forecast: 'Келесі айға болжам:',
+                changeRate: 'Өзгеру қарқыны:',
+                perMonth: 'айына',
+                monday: 'Дс',
+                tuesday: 'Сс',
+                wednesday: 'Ср',
+                thursday: 'Бс',
+                friday: 'Жм',
+                saturday: 'Сн',
+                sunday: 'Жс'
+            }
+        };
+
+        const monthNames = {
+            ru: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
+            kz: ['Қаң', 'Ақп', 'Нау', 'Сәу', 'Мам', 'Мау', 'Шіл', 'Там', 'Қыр', 'Қаз', 'Қар', 'Жел']
+        };
+
+        const violationColors = {
+            'Опоздание': '#3b82f6',
+            'Кешігу': '#3b82f6',
+            'Прогул': '#ef4444',
+            'Сабақты босату': '#ef4444',
+            'Нарушение дисциплины': '#f59e0b',
+            'Тәртіп бұзу': '#f59e0b',
+            'Невыполнение ДЗ': '#8b5cf6',
+            'Үй жұмысын орындамау': '#8b5cf6',
+            'Нарушение формы': '#10b981',
+            'Форма бұзу': '#10b981',
+            'Использование телефона': '#ec4899',
+            'Телефон пайдалану': '#ec4899',
+            'Другое': '#6b7280',
+            'Басқа': '#6b7280'
+        };
+
+        // ========== СМЕНА ЯЗЫКА ==========
+        function changeLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('schoolLang', lang);
+            
+            document.getElementById('langRu').classList.toggle('active', lang === 'ru');
+            document.getElementById('langKz').classList.toggle('active', lang === 'kz');
+            
+            document.querySelectorAll('[data-lang]').forEach(el => {
+                const key = el.getAttribute('data-lang');
+                if (translations[lang][key]) {
+                    el.textContent = translations[lang][key];
+                }
+            });
+
+            document.querySelectorAll('[data-lang-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-lang-placeholder');
+                if (translations[lang][key]) {
+                    el.placeholder = translations[lang][key];
+                }
+            });
+
+            const select = document.getElementById('violationType');
+            const options = select.querySelectorAll('option');
+            options.forEach((option, index) => {
+                option.textContent = translations[lang][`viol${index + 1}`];
+            });
+
+            updateAllStats();
+        }
+
+        // ========== ЗАГРУЗКА И СОХРАНЕНИЕ ==========
+        function loadData() {
+            const saved = localStorage.getItem('schoolViolations');
+            if (saved) {
+                try {
+                    violations = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Ошибка загрузки данных:', e);
+                    violations = [];
+                }
+            }
+            const savedLang = localStorage.getItem('schoolLang');
+            if (savedLang && (savedLang === 'ru' || savedLang === 'kz')) {
+                changeLang(savedLang);
+            } else {
+                changeLang('ru');
+            }
+            initializeYears();
+            updateAllStats();
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('schoolViolations', JSON.stringify(violations));
+            } catch (e) {
+                console.error('Ошибка сохранения данных:', e);
+                alert('Ошибка сохранения данных. Возможно, переполнено хранилище.');
+            }
+        }
+
+        function initializeYears() {
+            const years = [...new Set(violations.map(v => new Date(v.date).getFullYear()))];
+            if (years.length === 0) years.push(new Date().getFullYear());
+            years.sort((a, b) => b - a);
+
+            const select = document.getElementById('yearSelect');
+            select.innerHTML = years.map(year => 
+                `<option value="${year}" ${year === selectedYear ? 'selected' : ''}>${year} ${translations[currentLang].year}</option>`
+            ).join('');
+
+            select.onchange = (e) => {
+                selectedYear = parseInt(e.target.value);
+                updateAllStats();
+            };
+        }
+
+        // ========== ДОБАВЛЕНИЕ НАРУШЕНИЯ ==========
+        function addViolation() {
+            const name = document.getElementById('studentName').value.trim();
+            const typeSelect = document.getElementById('violationType');
+            const type = typeSelect.options[typeSelect.selectedIndex].text;
+            const date = document.getElementById('violationDate').value;
+            const time = document.getElementById('violationTime').value;
+
+            if (!name) {
+                alert(translations[currentLang].enterName);
+                return;
+            }
+
+            if (!date) {
+                alert('Пожалуйста, выберите дату!');
+                return;
+            }
+
+            violations.push({
+                id: Date.now(),
+                studentName: name,
+                type: type,
+                date: date,
+                time: time || '00:00',
+                timestamp: new Date().toISOString()
+            });
+
+            saveData();
+            
+            document.getElementById('studentName').value = '';
+            const today = new Date().toISOString().split('T')[0];
+            const now = new Date().toTimeString().slice(0, 5);
+            document.getElementById('violationDate').value = today;
+            document.getElementById('violationTime').value = now;
+
+            initializeYears();
+            updateAllStats();
+        }
+
+        function deleteViolation(id) {
+            if (confirm(translations[currentLang].confirmDelete)) {
+                violations = violations.filter(v => v.id !== id);
+                saveData();
+                initializeYears();
+                updateAllStats();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm(translations[currentLang].confirmClear)) {
+                violations = [];
+                localStorage.removeItem('schoolViolations');
+                initializeYears();
+                updateAllStats();
+            }
+        }
+
+        // ========== ЭКСПОРТ CSV ==========
+        function exportToCSV() {
+            if (violations.length === 0) {
+                alert('Нет данных для экспорта!');
+                return;
+            }
+
+            const csv = [
+                ['Дата', 'Время', 'Ученик', 'Тип нарушения'],
+                ...violations.map(v => [v.date, v.time || '', v.studentName, v.type])
+            ].map(row => row.join(',')).join('\n');
+            
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `violations_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        // ========== ЭКСПОРТ EXCEL ==========
+        function exportToExcel() {
+            if (violations.length === 0) {
+                alert('Нет данных для экспорта!');
+                return;
+            }
+
+            const violationsThisYear = violations.filter(v => 
+                new Date(v.date).getFullYear() === selectedYear
+            );
+
+            let excel = 'Дата\tВремя\tУченик\tТип нарушения\tДень недели\tМесяц\n';
+            violations.forEach(v => {
+                const date = new Date(v.date);
+                const dayNames = currentLang === 'ru' 
+                    ? ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+                    : ['Жс', 'Дс', 'Сс', 'Ср', 'Бс', 'Жм', 'Сн'];
+                const dayOfWeek = dayNames[date.getDay()];
+                const month = monthNames[currentLang][date.getMonth()];
+                excel += `${v.date}\t${v.time || ''}\t${v.studentName}\t${v.type}\t${dayOfWeek}\t${month}\n`;
+            });
+
+            excel += '\n\nСтатистика по ученикам\n';
+            excel += 'Ученик\tВсего нарушений\tВ этом году\tПроцент от всех\n';
+            const studentCount = {};
+            const studentCountYear = {};
+            violations.forEach(v => {
+                studentCount[v.studentName] = (studentCount[v.studentName] || 0) + 1;
+            });
+            violationsThisYear.forEach(v => {
+                studentCountYear[v.studentName] = (studentCountYear[v.studentName] || 0) + 1;
+            });
+            Object.entries(studentCount)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([name, count]) => {
+                    const yearCount = studentCountYear[name] || 0;
+                    const percent = ((count / violations.length) * 100).toFixed(1);
+                    excel += `${name}\t${count}\t${yearCount}\t${percent}%\n`;
+                });
+
+            excel += '\n\nСтатистика по типам нарушений\n';
+            excel += 'Тип нарушения\tКоличество\tПроцент\n';
+            const typeCount = {};
+            violationsThisYear.forEach(v => {
+                typeCount[v.type] = (typeCount[v.type] || 0) + 1;
+            });
+            Object.entries(typeCount)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([type, count]) => {
+                    const percent = violationsThisYear.length > 0 ? ((count / violationsThisYear.length) * 100).toFixed(1) : 0;
+                    excel += `${type}\t${count}\t${percent}%\n`;
+                });
+
+            excel += '\n\nСтатистика по месяцам\n';
+            excel += 'Месяц\tКоличество нарушений\n';
+            const monthlyStats = {};
+            violationsThisYear.forEach(v => {
+                const month = new Date(v.date).getMonth();
+                monthlyStats[month] = (monthlyStats[month] || 0) + 1;
+            });
+            monthNames[currentLang].forEach((month, index) => {
+                const count = monthlyStats[index] || 0;
+                excel += `${month}\t${count}\n`;
+            });
+
+            const blob = new Blob(['\ufeff' + excel], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `violations_detailed_${new Date().toISOString().split('T')[0]}.xls`;
+            link.click();
+        }
+
+        // ========== ОБНОВЛЕНИЕ СТАТИСТИКИ ==========
+        function updateAllStats() {
+            const violationsThisYear = violations.filter(v => 
+                new Date(v.date).getFullYear() === selectedYear
+            );
+
+            document.getElementById('currentYear').textContent = selectedYear;
+            document.getElementById('chartYear').textContent = selectedYear;
+            document.querySelectorAll('.pieYear, .topYear, .statsYear, .historyYear, .trendYear, .corrYear').forEach(el => {
+                el.textContent = selectedYear;
+            });
+
+            document.getElementById('totalViolations').textContent = violationsThisYear.length;
+            document.getElementById('allTimeViolations').textContent = violations.length;
+
+            const uniqueStudents = new Set(violationsThisYear.map(v => v.studentName)).size;
+            const percentage = totalStudents > 0 ? ((uniqueStudents / totalStudents) * 100).toFixed(1) : 0;
+            
+            const percentageEl = document.getElementById('percentage');
+            percentageEl.textContent = percentage + '%';
+            percentageEl.className = 'text-3xl md:text-4xl font-bold ' + getColorClass(percentage);
+            
+            document.getElementById('percentageDetails').innerHTML = `${uniqueStudents} ${translations[currentLang].outOf} ${totalStudents} ${translations[currentLang].students}`;
+
+            updateAvgMedian(violationsThisYear);
+            updateMonthlyChart(violationsThisYear);
+            updateTrendChart(violationsThisYear);
+            updatePieChart(violationsThisYear);
+            updateTopViolators(violationsThisYear);
+            updateTypeStats(violationsThisYear);
+            updateCorrelationMatrix(violationsThisYear);
+            updateHistoryTable(violationsThisYear);
+        }
+
+        function getColorClass(percent) {
+            if (percent < 10) return 'text-green-600';
+            if (percent < 25) return 'text-yellow-600';
+            return 'text-red-600';
+        }
+
+        // ========== СРЕДНЕЕ И МЕДИАНА ==========
+        function updateAvgMedian(violationsYear) {
+            const studentCount = {};
+            violationsYear.forEach(v => {
+                studentCount[v.studentName] = (studentCount[v.studentName] || 0) + 1;
+            });
+
+            const counts = Object.values(studentCount);
+            if (counts.length === 0) {
+                document.getElementById('avgViolations').textContent = '0';
+                document.getElementById('medianViolations').textContent = '0';
+                return;
+            }
+
+            const avg = (counts.reduce((a, b) => a + b, 0) / counts.length).toFixed(1);
+            
+            counts.sort((a, b) => a - b);
+            let median;
+            if (counts.length % 2 === 0) {
+                median = ((counts[counts.length / 2 - 1] + counts[counts.length / 2]) / 2).toFixed(1);
+            } else {
+                median = counts[Math.floor(counts.length / 2)];
+            }
+
+            document.getElementById('avgViolations').textContent = avg;
+            document.getElementById('medianViolations').textContent = median;
+        }
+
+        // ========== ГРАФИК ПО МЕСЯЦАМ ==========
+        function updateMonthlyChart(violationsYear) {
+            const monthlyStats = {};
+            violationsYear.forEach(v => {
+                const month = new Date(v.date).getMonth();
+                monthlyStats[month] = (monthlyStats[month] || 0) + 1;
+            });
+
+            const maxCount = Math.max(...Object.values(monthlyStats), 1);
+            const months = monthNames[currentLang];
+            
+            const chartHTML = months.map((month, index) => {
+                const count = monthlyStats[index] || 0;
+                const height = (count / maxCount) * 100;
+                
+                return `
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="text-xs md:text-sm font-bold text-indigo-600 mb-1">${count || ''}</div>
+                        <div class="chart-bar w-full bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t" 
+                             style="height: ${height}%; min-height: ${count > 0 ? '20px' : '0'}"></div>
+                        <div class="text-xs text-gray-600 mt-2">${month}</div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('monthlyChart').innerHTML = chartHTML;
+        }
+
+        // ========== ТРЕНД И ПРОГНОЗ ==========
+        function updateTrendChart(violationsYear) {
+            const monthlyData = Array(12).fill(0);
+            violationsYear.forEach(v => {
+                const month = new Date(v.date).getMonth();
+                monthlyData[month]++;
+            });
+
+            const n = 12;
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sumX += i;
+                sumY += monthlyData[i];
+                sumXY += i * monthlyData[i];
+                sumX2 += i * i;
+            }
+
+            const denominator = (n * sumX2 - sumX * sumX);
+            const m = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0;
+            const b = n > 0 ? (sumY - m * sumX) / n : 0;
+
+            const forecast = Math.max(0, Math.round(m * 12 + b));
+
+            let trendText, trendColor;
+            if (m > 0.5) {
+                trendText = translations[currentLang].trendGrowing;
+                trendColor = 'text-red-600';
+            } else if (m < -0.5) {
+                trendText = translations[currentLang].trendDecreasing;
+                trendColor = 'text-green-600';
+            } else {
+                trendText = translations[currentLang].trendStable;
+                trendColor = 'text-blue-600';
+            }
+
+            const maxVal = Math.max(...monthlyData, forecast, 1);
+            const scaleY = 200 / maxVal;
+            const scaleX = 80;
+
+            let dataPoints = '';
+            let trendLine = '';
+            
+            for (let i = 0; i < 12; i++) {
+                const x = 50 + i * scaleX;
+                const y = 220 - monthlyData[i] * scaleY;
+                dataPoints += `<circle cx="${x}" cy="${y}" r="5" fill="#4f46e5"/>`;
+                if (monthlyData[i] > 0) {
+                    dataPoints += `<text x="${x}" y="${y - 10}" text-anchor="middle" font-size="12" fill="#4f46e5">${monthlyData[i]}</text>`;
+                }
+            }
+
+            const x1 = 50;
+            const y1 = 220 - (m * 0 + b) * scaleY;
+            const x2 = 50 + 11 * scaleX;
+            const y2 = 220 - (m * 11 + b) * scaleY;
+            trendLine = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ef4444" stroke-width="2" stroke-dasharray="5,5" class="trend-line"/>`;
+
+            const forecastX = 50 + 12 * scaleX;
+            const forecastY = 220 - forecast * scaleY;
+            const forecastPoint = `<circle cx="${forecastX}" cy="${forecastY}" r="6" fill="#10b981" stroke="white" stroke-width="2"/>`;
+            const forecastText = `<text x="${forecastX}" y="${forecastY - 12}" text-anchor="middle" font-size="12" fill="#10b981" font-weight="bold">${forecast}</text>`;
+
+            document.getElementById('trendChart').innerHTML = `
+                <svg width="100%" height="250" viewBox="0 0 1100 250" preserveAspectRatio="xMidYMid meet">
+                    <line x1="50" y1="220" x2="1050" y2="220" stroke="#e5e7eb" stroke-width="2"/>
+                    ${trendLine}
+                    ${dataPoints}
+                    ${forecastPoint}
+                    ${forecastText}
+                </svg>
+            `;
+
+            document.getElementById('trendStats').innerHTML = `
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">${translations[currentLang].trendGrowing.split(':')[0]}</p>
+                    <p class="text-xl font-bold ${trendColor}">${trendText.split(':')[1] ? trendText.split(':')[1].trim() : trendText}</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">${translations[currentLang].forecast}</p>
+                    <p class="text-xl font-bold text-green-600">${forecast}</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-600">${translations[currentLang].changeRate}</p>
+                    <p class="text-xl font-bold text-purple-600">${m.toFixed(2)} ${translations[currentLang].perMonth}</p>
+                </div>
+            `;
+        }
+
+        // ========== КРУГОВАЯ ДИАГРАММА ==========
+        function updatePieChart(violationsYear) {
+            const violationsByType = {};
+            violationsYear.forEach(v => {
+                violationsByType[v.type] = (violationsByType[v.type] || 0) + 1;
+            });
+
+            if (violationsYear.length === 0) {
+                document.getElementById('pieChart').innerHTML = `<div class="text-gray-400 py-16">${translations[currentLang].noData}</div>`;
+                return;
+            }
+
+            const total = violationsYear.length;
+            let currentAngle = 0;
+            let paths = '';
+            let legend = '';
+
+            Object.entries(violationsByType).forEach(([type, count]) => {
+                const percentage = (count / total) * 100;
+                const angle = (count / total) * 360;
+                
+                const startAngle = (currentAngle - 90) * (Math.PI / 180);
+                const endAngle = (currentAngle + angle - 90) * (Math.PI / 180);
+                
+                const x1 = 100 + 90 * Math.cos(startAngle);
+                const y1 = 100 + 90 * Math.sin(startAngle);
+                const x2 = 100 + 90 * Math.cos(endAngle);
+                const y2 = 100 + 90 * Math.sin(endAngle);
+                const largeArc = angle > 180 ? 1 : 0;
+
+                paths += `<path d="M 100 100 L ${x1} ${y1} A 90 90 0 ${largeArc} 1 ${x2} ${y2} Z" 
+                          fill="${violationColors[type]}" stroke="white" stroke-width="2"/>`;
+                
+                legend += `
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded flex-shrink-0" style="background-color: ${violationColors[type]}"></div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-gray-700 truncate">${type}</p>
+                            <p class="text-xs text-gray-500">${count} (${percentage.toFixed(1)}%)</p>
+                        </div>
+                    </div>
+                `;
+
+                currentAngle += angle;
+            });
+
+            document.getElementById('pieChart').innerHTML = `
+                <svg width="280" height="280" viewBox="0 0 200 200" class="mb-4">
+                    <circle cx="100" cy="100" r="90" fill="#f3f4f6" />
+                    ${paths}
+                    <circle cx="100" cy="100" r="45" fill="white" />
+                    <text x="100" y="95" text-anchor="middle" class="text-2xl font-bold" fill="#1f2937">${total}</text>
+                    <text x="100" y="115" text-anchor="middle" class="text-xs" fill="#6b7280">${translations[currentLang].violations}</text>
+                </svg>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">${legend}</div>
+            `;
+        }
+
+        // ========== ТОП-5 НАРУШИТЕЛЕЙ ==========
+        function updateTopViolators(violationsYear) {
+            const studentCount = {};
+            violationsYear.forEach(v => {
+                studentCount[v.studentName] = (studentCount[v.studentName] || 0) + 1;
+            });
+
+            const top = Object.entries(studentCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+
+            if (top.length === 0) {
+                document.getElementById('topViolators').innerHTML = `<div class="text-gray-400 py-16 text-center">${translations[currentLang].noData}</div>`;
+                return;
+            }
+
+            const maxCount = Math.max(...top.map(v => v[1]));
+            
+            const html = top.map(([name, count], index) => {
+                const width = (count / maxCount) * 100;
+                const color = index === 0 ? '#ef4444' : index === 1 ? '#f59e0b' : '#6b7280';
+                
+                return `
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-1">
+                            <div class="flex items-center gap-2 flex-1 min-w-0">
+                                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex-shrink-0">
+                                    ${index + 1}
+                                </span>
+                                <span class="font-medium text-gray-700 truncate">${name}</span>
+                            </div>
+                            <span class="text-sm font-bold text-gray-600 ml-2">${count}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="h-2.5 rounded-full transition-all duration-500" 
+                                 style="width: ${width}%; background-color: ${color}"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('topViolators').innerHTML = html;
+        }
+
+        // ========== СТАТИСТИКА ПО ТИПАМ ==========
+        function updateTypeStats(violationsYear) {
+            const typeCount = {};
+            violationsYear.forEach(v => {
+                typeCount[v.type] = (typeCount[v.type] || 0) + 1;
+            });
+
+            if (Object.keys(typeCount).length === 0) {
+                document.getElementById('typeStats').innerHTML = `<p class="text-gray-500 text-center py-8">${translations[currentLang].noViolations} ${selectedYear} ${translations[currentLang].yearEmpty}</p>`;
+                return;
+            }
+
+            const html = Object.entries(typeCount)
+                .sort((a, b) => b[1] - a[1])
+                .map(([type, count]) => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors mb-3">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${violationColors[type]}"></div>
+                            <span class="font-medium text-gray-700 truncate">${type}</span>
+                        </div>
+                        <span class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-bold ml-2">${count}</span>
+                    </div>
+                `).join('');
+
+            document.getElementById('typeStats').innerHTML = html;
+        }
+
+        // ========== КОРРЕЛЯЦИОННАЯ МАТРИЦА ==========
+        function updateCorrelationMatrix(violationsYear) {
+            if (violationsYear.length === 0) {
+                document.getElementById('correlationMatrix').innerHTML = `<p class="text-gray-500 text-center py-8">${translations[currentLang].noData}</p>`;
+                return;
+            }
+
+            const matrix = {};
+            const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            
+            const types = [...new Set(violationsYear.map(v => v.type))];
+            
+            dayNames.forEach(day => {
+                matrix[day] = {};
+                types.forEach(type => {
+                    matrix[day][type] = 0;
+                });
+            });
+
+            violationsYear.forEach(v => {
+                const dayIndex = new Date(v.date).getDay();
+                const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+                const dayKey = dayNames[adjustedIndex];
+                matrix[dayKey][v.type]++;
+            });
+
+            let maxVal = 0;
+            Object.values(matrix).forEach(row => {
+                Object.values(row).forEach(val => {
+                    if (val > maxVal) maxVal = val;
+                });
+            });
+
+            let html = '<table class="w-full text-xs md:text-sm"><thead><tr><th class="p-2"></th>';
+            types.forEach(type => {
+                html += `<th class="p-2 text-center font-semibold text-gray-700"><div class="truncate max-w-[100px]">${type}</div></th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            dayNames.forEach(day => {
+                const dayLabel = translations[currentLang][day];
+                html += `<tr><td class="p-2 font-semibold text-gray-700">${dayLabel}</td>`;
+                types.forEach(type => {
+                    const count = matrix[day][type];
+                    const intensity = maxVal > 0 ? (count / maxVal) : 0;
+                    const bgColor = `rgba(79, 70, 229, ${intensity * 0.8})`;
+                    const textColor = intensity > 0.5 ? 'white' : '#1f2937';
+                    html += `<td class="p-2 md:p-3 text-center font-bold" style="background-color: ${bgColor}; color: ${textColor}">${count || ''}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('correlationMatrix').innerHTML = html;
+        }
+
+        // ========== ИСТОРИЯ ==========
+        function updateHistoryTable(violationsYear) {
+            if (violationsYear.length === 0) {
+                document.getElementById('historyTable').innerHTML = `
+                    <tr><td colspan="5" class="text-gray-500 text-center py-8">${translations[currentLang].historyEmpty} ${selectedYear} ${translations[currentLang].yearEmpty2}</td></tr>
+                `;
+                return;
+            }
+
+            const html = violationsYear.slice().reverse().map(v => `
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                    <td class="py-3 px-2 md:px-4 text-gray-600 text-sm">${new Date(v.date).toLocaleDateString('ru-RU')}</td>
+                    <td class="py-3 px-2 md:px-4 text-gray-600 text-sm">⏰ ${v.time || '—'}</td>
+                    <td class="py-3 px-2 md:px-4 font-medium text-gray-800 text-sm">${v.studentName}</td>
+                    <td class="py-3 px-2 md:px-4">
+                        <span class="inline-flex items-center gap-2 px-2 md:px-3 py-1 rounded-full text-xs md:text-sm font-medium text-white" 
+                              style="background-color: ${violationColors[v.type]}">${v.type}</span>
+                    </td>
+                    <td class="py-3 px-2 md:px-4 text-right">
+                        <button onclick="deleteViolation(${v.id})" 
+                                class="text-red-600 hover:text-red-800 font-medium transition-colors text-sm">${translations[currentLang].delete}</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('historyTable').innerHTML = html;
+        }
+
+        // ========== ПОИСК ПО УЧЕНИКУ ==========
+        function showStudentStats() {
+            const searchName = document.getElementById('searchInput').value.trim();
+            if (!searchName) {
+                alert(translations[currentLang].enterName);
+                return;
+            }
+
+            const studentViolations = violations.filter(v => 
+                v.studentName.toLowerCase().includes(searchName.toLowerCase())
+            );
+
+            if (studentViolations.length === 0) {
+                document.getElementById('studentStatsContainer').innerHTML = `
+                    <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+                        <p class="text-yellow-800">${translations[currentLang].notFound} "${searchName}" ${translations[currentLang].notFound2}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const byYear = {};
+            const byType = {};
+            studentViolations.forEach(v => {
+                const year = new Date(v.date).getFullYear();
+                byYear[year] = (byYear[year] || 0) + 1;
+                byType[v.type] = (byType[v.type] || 0) + 1;
+            });
+
+            const yearStats = Object.entries(byYear)
+                .sort((a, b) => b[0] - a[0])
+                .map(([year, count]) => `
+                    <div class="flex justify-between items-center mb-2 p-2 bg-gray-50 rounded">
+                        <span class="font-medium">${year} ${translations[currentLang].year}</span>
+                        <span class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-bold">${count}</span>
+                    </div>
+                `).join('');
+
+            const typeStats = Object.entries(byType)
+                .sort((a, b) => b[1] - a[1])
+                .map(([type, count]) => `
+                    <div class="flex justify-between items-center mb-2 p-2 bg-gray-50 rounded">
+                        <div class="flex items-center gap-2 flex-1 min-w-0">
+                            <div class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${violationColors[type]}"></div>
+                            <span class="font-medium truncate">${type}</span>
+                        </div>
+                        <span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold ml-2">${count}</span>
+                    </div>
+                `).join('');
+
+            const recentViolations = studentViolations
+                .slice(-10)
+                .reverse()
+                .map(v => `
+                    <div class="flex justify-between items-center text-sm mb-2 p-2 bg-gray-50 rounded">
+                        <span class="text-gray-600">${new Date(v.date).toLocaleDateString('ru-RU')}</span>
+                        <span class="font-medium" style="color: ${violationColors[v.type]}">${v.type}</span>
+                    </div>
+                `).join('');
+
+            const firstViolation = studentViolations.sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+            const lastViolation = studentViolations.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+            document.getElementById('studentStatsContainer').innerHTML = `
+                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-2xl font-bold text-gray-800">${searchName}</h3>
+                        <div class="bg-white px-4 py-2 rounded-full shadow">
+                            <span class="text-3xl font-bold text-indigo-600">${studentViolations.length}</span>
+                            <span class="text-sm text-gray-600 ml-2">${translations[currentLang].totalViolations}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <p class="text-sm text-gray-600 mb-1">${translations[currentLang].firstViolation}</p>
+                            <p class="text-lg font-bold text-gray-800">${new Date(firstViolation.date).toLocaleDateString('ru-RU')}</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <p class="text-sm text-gray-600 mb-1">${translations[currentLang].lastViolation}</p>
+                            <p class="text-lg font-bold text-gray-800">${new Date(lastViolation.date).toLocaleDateString('ru-RU')}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <h4 class="font-bold text-gray-700 mb-3">${translations[currentLang].byYears}</h4>
+                            ${yearStats}
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <h4 class="font-bold text-gray-700 mb-3">${translations[currentLang].byTypes}</h4>
+                            ${typeStats}
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <h4 class="font-bold text-gray-700 mb-3">${translations[currentLang].last10}</h4>
+                            <div class="max-h-64 overflow-y-auto">
+                                ${recentViolations}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ========== ИНИЦИАЛИЗАЦИЯ ==========
+        window.onload = function() {
+            const today = new Date().toISOString().split('T')[0];
+            const now = new Date().toTimeString().slice(0, 5);
+            document.getElementById('violationDate').value = today;
+            document.getElementById('violationTime').value = now;
+            
+            loadData();
+        };
+    </script>
+</body>
+</html>
